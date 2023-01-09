@@ -43,12 +43,12 @@ chr_gene<-gene_anno %>%
 chr_anno_GRanges<-anno_GRanges[seqnames(anno_GRanges)==chromo]
 chr_exon_GRanges<-exon_GRanges[seqnames(exon_GRanges)==chromo]
 # intron
-## gaps for each gene
+## setdiff for each gene -> consider building summary table as part of this loop ?
 plan(multisession,workers=4)
 intron_tbl<-future_map_dfr(unique(chr_gene$name),function(i){
   tmp_gene_GRange<-chr_anno_GRanges[chr_anno_GRanges@elementMetadata$name == i]
   tmp_exon_GRanges<-chr_exon_GRanges[chr_exon_GRanges@elementMetadata$name == i]
-  tmp_intron<-gaps(tmp_exon_GRanges,start=start(tmp_gene_GRange))
+  tmp_intron<-setdiff(tmp_gene_GRange,tmp_exon_GRanges)
   tibble(as.data.frame(tmp_intron)) %>% 
     mutate(name=i)
   
@@ -99,7 +99,10 @@ exon_intron_ratio%>%
   mutate(name=factor(name,levels=order_name$name)) %>% 
   ggplot(.,aes(name,w,fill=type))+
   geom_bar(stat = 'identity',position='fill')+
-  scale_fill_brewer(palette='Dark2')
+  scale_fill_brewer(palette='Dark2')+
+  xlab('Genes')+
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank())
 #---------------------------------------------------
 RNA_cluster_tbl<-vroom("~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/RNA/cluster/RADICL_iPSC_RNA_chr19.bed_cluster.txt",
                        col_names = F,delim = "\t")
