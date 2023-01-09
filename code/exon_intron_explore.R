@@ -43,7 +43,7 @@ chr_gene<-gene_anno %>%
 chr_anno_GRanges<-anno_GRanges[seqnames(anno_GRanges)==chromo]
 chr_exon_GRanges<-exon_GRanges[seqnames(exon_GRanges)==chromo]
 # intron
-## setdiff for each gene -> consider building summary table as part of this loop ?
+## setdiff for each gene 
 plan(multisession,workers=4)
 intron_tbl<-future_map_dfr(unique(chr_gene$name),function(i){
   tmp_gene_GRange<-chr_anno_GRanges[chr_anno_GRanges@elementMetadata$name == i]
@@ -151,17 +151,21 @@ gini_cpu_fn<-function(exon_intron_GRanges,read_GRanges,i){
     return(1)
   }
 }
+
+
 gene_set<-unique(exon_intron_GRanges@elementMetadata$name)
 plan(multisession,workers=3)
 gene_gini<-future_map_dbl(gene_set,function(i){
   gini_cpu_fn(exon_intron_GRanges,read_GRanges,i)
 })
 plan(sequential)
-rate_vec<-countOverlaps(exon_intron_GRanges[exon_intron_GRanges@elementMetadata$name==i],read_GRanges)/width(exon_intron_GRanges[exon_intron_GRanges@elementMetadata$name==i])
-combo_vec<-t(combn(1:length(rate_vec),2))
-sum(abs(rate_vec[combo_vec[,1]]-rate_vec[combo_vec[,2]]))/(length(rate_vec)**2*mean(rate_vec))
 gene_rate<-countOverlaps(anno_GRanges[anno_GRanges@elementMetadata$name==i],read_GRanges)/width(anno_GRanges[anno_GRanges@elementMetadata$name==i])
-map_dbl(seq_along(rate_vec),function(x){
-  poisson.test(countOverlaps(exon_intron_GRanges[exon_intron_GRanges@elementMetadata$name==i],read_GRanges)[x],
-             width(exon_intron_GRanges[exon_intron_GRanges@elementMetadata$name==i])[x],
-             r = gene_rate,alternative='greater')$p.value})
+
+tmp_refseq_GRange<-exon_intron_GRanges[exon_intron_GRanges@elementMetadata$name==i]
+as_tibble(tmp_refseq_GRange) %>% 
+  mutate(count=countOverlaps(tmp_refseq_GRange,read_GRanges),
+         rate=count/width) %>% 
+  mutate(p.val=pmap_dbl(list(count,width),function(count,width){
+    poisson.test(count,width,r=gene_rate,alternative='greater')$p.value
+  }))
+
