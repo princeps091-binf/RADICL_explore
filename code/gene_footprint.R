@@ -3,6 +3,7 @@ library(tidyverse)
 library(readr)
 library(vroom)
 library(GenomicRanges)
+library(furrr)
 gene_anno<-vroom("~/Documents/FANTOM6/data/annotation/refseq_all_hg38.tsv",
                  col_names = T,delim = "\t",col_types = list("i",'c','c','c','i','i','i','i','i','c','c','i','c','c','c'))
 anno_GRanges<-GRanges(seqnames=gene_anno$chrom,
@@ -72,7 +73,7 @@ exon_intron_GRanges<-GRanges(seqnames=exon_intron_tbl$chrom,
 mcols(exon_intron_GRanges)<-tibble(name=exon_intron_tbl$name,type=exon_intron_tbl$type)
 
 
-RNA_cluster_tbl<-vroom("~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/RNA/cluster/RADICL_iPSC_RNA_chr19.bed_cluster.txt",
+RNA_cluster_tbl<-vroom("~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/RNA/RADICL_iPSC_RNA_chr19.bed",
                        col_names = F,delim = "\t")
 read_GRanges<-GRanges(seqnames=RNA_cluster_tbl$X1,
                       ranges = IRanges(start=RNA_cluster_tbl$X2,
@@ -81,21 +82,64 @@ read_GRanges<-GRanges(seqnames=RNA_cluster_tbl$X1,
                       strand=RNA_cluster_tbl$X6
 )
 mcols(read_GRanges)<-tibble(ID=RNA_cluster_tbl$X4)
-i<-'NR_038237.1'
 
+
+
+# Read DNA side with read ID filter from RNA side
+i<-'XM_011527205.3'
 tmp_refseq_GRange<-exon_intron_GRanges[exon_intron_GRanges@elementMetadata$name==i]
-as_tibble(tmp_refseq_GRange) %>% 
-  mutate(count=countOverlaps(tmp_refseq_GRange,read_GRanges),
-         rate=count/width) %>% 
-  mutate(p.val=pmap_dbl(list(count,width),function(count,width){
-    poisson.test(count,width,r=gene_rate,alternative='greater')$p.value
-  }))
-
-tmp_over<-as_tibble(findOverlaps(tmp_refseq_GRange,RNA_read_GRanges)) %>% 
+tmp_over<-as_tibble(findOverlaps(tmp_refseq_GRange,read_GRanges)) %>% 
   mutate(seqnames=as.vector(seqnames(tmp_refseq_GRange))[queryHits],
          start=start(tmp_refseq_GRange)[queryHits],
          end=end(tmp_refseq_GRange)[queryHits],
          strand=as.vector(strand(tmp_refseq_GRange))[queryHits],
          width=abs(start(tmp_refseq_GRange)[queryHits] - end(tmp_refseq_GRange)[queryHits]),
-         read.ID=mcols(RNA_read_GRanges)$ID[subjectHits]) 
-# Read DNA side with read ID filter from RNA side
+         read.ID=mcols(read_GRanges)$ID[subjectHits])
+read_set<-tmp_over$read.ID
+f <- function(x, pos){
+  x %>% 
+    filter(X4 %in% read_set)
+  
+}
+DNA_side_tbl<-readr::read_delim_chunked('~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/RADICL_iPSC_DNA.bed',
+                          delim = "\t",
+                          chunk_size = 1e4,
+                          col_names = F,
+                          DataFrameCallback$new(f))
+tmp_over %>% 
+  left_join(.,DNA_side_tbl,by=c('read.ID'='X4'))%>% 
+  ggplot(.,aes(X2,1,color=as.factor(queryHits)))+
+  geom_point(size=0.5)+
+  facet_grid(X1~.)+
+  theme(legend.position="none")
+gene_chunk_set<-unique(tmp_over$queryHits)
+chunk_combo_tbl<-expand_grid(a=gene_chunk_set,b=gene_chunk_set) %>% 
+  filter(a != b)
+plan(multisession,workers=4)
+chunk_combo_tbl<-chunk_combo_tbl %>%
+  dplyr::slice(1:200)
+  mutate(inter.n=future_pmap_int(list(a,b),function(a,b){
+    tmp_a<-tmp_over %>% 
+      filter(queryHits == a) %>% 
+      left_join(.,DNA_side_tbl,by=c('read.ID'='X4'))
+    tmp_b<-tmp_over %>% 
+      filter(queryHits == b) %>% 
+      left_join(.,DNA_side_tbl,by=c('read.ID'='X4'))
+    a_GRanges<-GRanges(seqnames=tmp_a$X1,
+                       ranges = IRanges(start=tmp_a$X2,
+                                        end=tmp_a$X3
+                       ))
+    b_GRanges<-GRanges(seqnames=tmp_b$X1,
+                       ranges = IRanges(start=tmp_b$X2,
+                                        end=tmp_b$X3
+                       ))
+    return(length(findOverlaps(a_GRanges,b_GRanges)))
+    
+    
+  }))
+plan(sequential)
+j<-1
+g<-31
+
+distanceToNearest(a_GRanges,b_GRanges,)
+distanceToNearest(b_GRanges,a_GRanges)

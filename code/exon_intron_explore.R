@@ -140,6 +140,60 @@ exon_intron_tbl %>%
   ggplot(.,aes(rd,color=type))+
   geom_density()+
   scale_x_log10()
+
+
+map_dfr(c('exon','intron'),function(i){
+  read_cov<-length(unique(queryHits(findOverlaps(read_GRanges,exon_intron_GRanges[exon_intron_GRanges@elementMetadata$type==i]))))/length(read_GRanges)
+  gen_cov<-sum(width(exon_intron_GRanges[exon_intron_GRanges@elementMetadata$type==i]))/sum(width(exon_intron_GRanges))
+  return(tibble(cov=c(read_cov,gen_cov),set=c('read','foot'),type=i))
+}) %>% 
+  ggplot(.,aes(set,cov,fill=type))+
+  geom_bar(stat='identity')
+
+
+exon_intron_read_count_tbl<-as_tibble(exon_intron_GRanges) %>% 
+  mutate(count=countOverlaps(exon_intron_GRanges,read_GRanges),
+         rate=count/width)
+gene_summary_tbl<-exon_intron_read_count_tbl%>% 
+  group_by(name) %>% 
+  summarise(g.count=sum(count),
+            g.width=sum(width)) %>% 
+  mutate(g.rate=g.count/g.width)
+
+exon_intron_read_count_tbl<-exon_intron_read_count_tbl %>% 
+  left_join(.,gene_summary_tbl) %>% 
+  mutate(p.val=pmap_dbl(list(count,width,g.rate),function(count,width,g.rate){
+    poisson.test(count,width,r=g.rate,alternative='greater')$p.value
+  }))
+
+exon_intron_read_count_tbl %>% 
+  mutate(zero=ifelse(count==0,'zero','interacting')) %>% 
+  group_by(type,zero) %>% 
+  count() %>% 
+  ggplot(.,aes(type,n,fill=zero))+
+  geom_bar(stat='identity',position='fill')
+
+exon_intron_read_count_tbl %>% 
+  filter(count >0) %>% 
+  ggplot(.,aes(count,width))+
+  geom_point(size=0.1)+
+  scale_x_log10()+
+  scale_y_log10()+
+  facet_grid(type~.)
+
+exon_intron_read_count_tbl %>% 
+  filter(count >0) %>% 
+  ggplot(.,aes(count,g.count))+
+  geom_point(size=0.1)+
+  scale_x_log10()+
+  scale_y_log10()+
+  facet_grid(type~.)
+
+exon_intron_read_count_tbl %>%
+  ggplot(.,aes(p.val,color=type))+
+  geom_density()
+
+
 # within gene gini coeff and deviation from gene-wide rate
 i<-'NR_038237.1'
 gini_cpu_fn<-function(exon_intron_GRanges,read_GRanges,i){
