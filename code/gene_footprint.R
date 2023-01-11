@@ -116,9 +116,10 @@ gene_chunk_set<-unique(tmp_over$queryHits)
 chunk_combo_tbl<-expand_grid(a=gene_chunk_set,b=gene_chunk_set) %>% 
   filter(a != b)
 plan(multisession,workers=4)
-chunk_combo_tbl<-chunk_combo_tbl %>%
-  dplyr::slice(1:200)
-  mutate(inter.n=future_pmap_int(list(a,b),function(a,b){
+#chunk_combo_tbl<-
+test_chunk<-  chunk_combo_tbl %>%
+  dplyr::slice(1:20) %>% 
+  mutate(inter.n=future_pmap_dfr(list(a,b),function(a,b){
     tmp_a<-tmp_over %>% 
       filter(queryHits == a) %>% 
       left_join(.,DNA_side_tbl,by=c('read.ID'='X4'))
@@ -133,13 +134,24 @@ chunk_combo_tbl<-chunk_combo_tbl %>%
                        ranges = IRanges(start=tmp_b$X2,
                                         end=tmp_b$X3
                        ))
-    return(length(findOverlaps(a_GRanges,b_GRanges)))
     
-    
+    a_chr<-as.vector(seqnames(a_GRanges))
+    b_chr<-as.vector(seqnames(b_GRanges))
+    # change metric to instead reflect proportion of reads sharing chromosome with at least one other read from the other set
+    chr_sim<-expand_grid(a_chr,b_chr) %>% 
+      mutate(same=a_chr == b_chr) %>% 
+      summarise(sim=sum(same)/n()) %>% 
+      unlist()
+    n_inter<-length(findOverlaps(a_GRanges,b_GRanges))
+    dist_tbl<-as_tibble(distanceToNearest(a_GRanges,b_GRanges)) %>% 
+      bind_rows(.,as_tibble(distanceToNearest(b_GRanges,a_GRanges)))
+    return(tibble(chr.sim=chr_sim,n.inter=n_inter,dist=list(dist_tbl$distance)))
   }))
 plan(sequential)
 j<-1
 g<-31
 
-distanceToNearest(a_GRanges,b_GRanges,)
-distanceToNearest(b_GRanges,a_GRanges)
+as_tibble(distanceToNearest(a_GRanges,b_GRanges)) %>% 
+  bind_rows(.,as_tibble(distanceToNearest(b_GRanges,a_GRanges))) %>% 
+  ggplot(.,aes(distance))+
+  geom_density()

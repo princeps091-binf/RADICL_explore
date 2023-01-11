@@ -51,8 +51,8 @@ RNA_track_tbl %>%
   theme_classic()
 #-------------------------------------------------------------------------
 #Single-track
-RADICL_track_tbl<- vroom("./../data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/cluster/singleton_data/RADICL_DNA_singleton_bg_chr19.bdg",delim="\t",col_names = F)
-DNA_track<-vroom("./../data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/cluster/singleton_data/RADICL_DNA_smooth_chr19.bdg",delim="\t",col_names = F)
+RADICL_track_tbl<- vroom("./../data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/track_viz/RADICL_DNA_singleton_bg.bdg",delim="\t",col_names = F)
+DNA_track<-vroom("./../data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/track_viz/RADICL_DNA_smooth.bdg",delim="\t",col_names = F)
 all_track_val<-c(RADICL_track_tbl$X3,DNA_track$X3)
 max_coord<-as.integer(max(all_track_val) +(1e6 - max(all_track_val) %% 1e6))
 min_coord<-as.integer(min(all_track_val) - (min(all_track_val) %% 1e6))

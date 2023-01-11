@@ -47,9 +47,9 @@ macs3 callpeak -t ff_iPSC_ATAC_sorted_chr22.bed -g hs -f BED --nomodel --shift -
 macs3 predictd -i ff_iPSC_ATAC_sorted_chr19.bed -g hs -m 5 50
 ###############################################
 # Modified script to call peaks with custom background
-macs3 pileup -f BED -i ~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/RADICL_iPSC_DNA_chr19.bed --extsize 75 -B -o RADICL_DNA_smooth_chr19.bdg
+macs3 pileup -f BED -i ~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/RADICL_iPSC_DNA_chr19.bed --extsize 147 -o RADICL_DNA_smooth_chr19.bdg
 
-macs3 pileup -f BED -i ~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/cluster/singleton_data/chr19_DNA_singleton.bed --extsize 75 -B -o RADICL_DNA_singleton_bg_chr19.bdg
+macs3 pileup -f BED -i ~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/DNA/cluster/singleton_data/chr19_DNA_singleton.bed --extsize 147 -o RADICL_DNA_singleton_bg_chr19.bdg
 
 macs3 bdgcmp -t RADICL_DNA_smooth_chr19.bdg -c RADICL_DNA_singleton_bg_chr19.bdg -m qpois -p 1 -o RADICL_DNA_qval_chr19.bdg
 
