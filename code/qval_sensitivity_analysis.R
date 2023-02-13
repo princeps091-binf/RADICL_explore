@@ -79,10 +79,12 @@ peak_read_content_summary %>%
   mutate(qval=fct_relevel(qval,as.character(sort(as.numeric(names(peak_tbl_l)))))) %>% 
   group_by(peak.start,peak.end,qval) %>% 
   summarise(noise.prop=sum(n<3)/n(),
-            cluster.size=median(n),
+            cluster.size=mean(n),
             cluster.min=min(n),
             cluster.max=max(n)) %>% 
-  ggplot(.,aes(cluster.max,noise.prop))+
-  geom_point(alpha=0.3,size=0.1)+
-  scale_x_log10()+
-  facet_grid(qval~.)
+  ggplot(.,aes(noise.prop))+
+  geom_density()+
+  scale_x_sqrt()+
+  facet_grid(qval~.,scales='free_y')
+
+

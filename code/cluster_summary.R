@@ -2,17 +2,18 @@ library(tidyverse)
 library(GenomicRanges)
 library(vroom)
 read_folder<-"~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/processed/DNA/cluster/"
+read_folder<-"~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/chr_data/RNA/cluster/"
 
 chr_set<-str_split_fixed(str_split_fixed(list.files(read_folder),'\\.',2)[,1],'_',4)[,4]
 
 cluster_summary_table<-map_dfr(chr_set,function(chromo){
   message(chromo,': loading')
-  DNA_read_tbl<-vroom(paste0(read_folder,"RADICL_iPSC_DNA_",chromo,".bed_cluster.txt"),
+  DNA_read_tbl<-vroom(paste0(read_folder,"RADICL_iPSC_RNA_",chromo,".bed_cluster.txt"),
                       col_names = F,
                       delim="\t")
   message(chromo,': summary')
   return(DNA_read_tbl %>% 
-    group_by(X6) %>% 
+    group_by(X7) %>% 
     summarise(n=n(),
               start=min(c(X2,X3)),
               end=max(c(X2,X3))) %>% 
@@ -21,10 +22,11 @@ cluster_summary_table<-map_dfr(chr_set,function(chromo){
 })
 # Fragment size indication?
 cluster_summary_table %>% 
-  filter(n <2 ) %>% 
+  filter(n >10 ) %>% 
   mutate(d=end-start) %>% 
   ggplot(.,aes(d))+
-  geom_density()
+  geom_density()+
+  scale_x_log10()
 # Lonely clusters constitute bulk of reads
 cluster_summary_table %>% 
   mutate(bg=ifelse(n < 3 ,'noise','other')) %>% 

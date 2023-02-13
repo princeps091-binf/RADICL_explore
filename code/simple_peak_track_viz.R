@@ -37,6 +37,5 @@ MACS_t_track_tbl %>%
   geom_segment(data=black_list_tbl,
                aes(x=X2,xend=X3,y=1,yend=1,color=X4),linewidth=5)+
   
-
-    theme_classic()
   
+  theme_classic()

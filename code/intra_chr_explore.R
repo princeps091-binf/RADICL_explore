@@ -2,8 +2,19 @@
 library(tidyverse)
 library(vroom)
 
-RADICL_intra_tbl<-vroom("~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/RADICL_iPSC_intra.bed",
+RADICL_intra_tbl<-vroom("~/Documents/FANTOM6/data/RADICL/Set18-7_iPSC_rep2_AGTTCC_S0_L002_R1_001.bed/raw/RADICL_iPSC_intra.bed",
                        col_names = F,delim = "\t")
+
+chromo<-"chr2"
+chr_intra<-RADICL_intra_tbl %>% 
+  filter(X1 == chromo & X7 == chromo)
+  
+chr_intra %>% 
+  select(X2,X3,X8,X9) %>% 
+  mutate(RNA.mid=X2 + (X3-X2)/2,
+         DNA.mid=X8 + (X8-X9)/2) %>% 
+  ggplot(.,aes(RNA.mid,DNA.mid))+
+  geom_point(size=0.1,alpha=0.1)
 
 
 RADICL_intra_tbl %>% 
@@ -11,8 +22,8 @@ RADICL_intra_tbl %>%
          RNA.mid=X8 + (X8-X9)/2) %>% 
   ggplot(.,aes(abs(DNA.mid - RNA.mid)))+
   geom_density()+
-  scale_x_log10()+
-  facet_wrap(X1~.)
+  scale_x_log10()#+
+#  facet_wrap(X1~.)
 
 DNA_read_GRanges<-GRanges(seqnames=RADICL_intra_tbl$X7,
                       ranges = IRanges(start=RADICL_intra_tbl$X8,
@@ -32,8 +43,8 @@ mcols(RNA_read_GRanges)<-tibble(ID=RADICL_intra_tbl$X4)
 
 #-------------------------------------------------------
 # Per gene examination
-gene_anno<-vroom("~/Documents/FANTOM6/data/annotation/refseq_all_hg38.tsv",
-                 col_names = T,delim = "\t",col_types = list("i",'c','c','c','i','i','i','i','i','c','c','i','c','c','c'))
+gene_anno<-vroom("~/Documents/FANTOM6/data/annotation/FANTOM_CAT.lv3_robust.bed",
+                 col_names = F,delim = "\t",col_types = list("c",'i','i','c','d','c','i','i','c','d','c','c'))
 
 anno_GRanges<-GRanges(seqnames=gene_anno$chrom,
                       ranges = IRanges(start=gene_anno$txStart,

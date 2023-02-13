@@ -17,7 +17,7 @@ awk '$1 == "chr19"' RADICL_iPSC_RNA.bed > RADICL_iPSC_RNA_chr19.bed
 ~/bedtools2.3 closest -io -t "all" -d -a RADICL_iPSC_chr19_DNA_merged.bed -b RADICL_iPSC_chr19_DNA_merged.bed > RADICL_iPSC_chr19_DNA_cluster_neighbour.tsv
 
 ########################
-for i in {1..20}
+for i in {1..22}
 do
 chrom="chr$i"
 echo $chrom
