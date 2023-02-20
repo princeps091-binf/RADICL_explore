@@ -3,6 +3,7 @@ library(GenomicRanges)
 library(vroom)
 library(purrr)
 library(furrr)
+library(igraph)
 f <- function(x, pos){
   x %>% 
     filter(X4 %in% read_set)
@@ -87,87 +88,9 @@ peak_transcript_inter_tbl<-as_tibble(findOverlaps(RNA_read_GRanges,reduced_trans
          tr.ID=subjectHits) %>% 
   dplyr::select(read.ID,tr.ID) %>% 
   full_join(.,peak_read_content_tbl)
+save(red_tr_to_transcript_tbl,file = "./data/reduced_transcript_to_transcript_ID_tbl.Rda")
+save(peak_transcript_inter_tbl,file = "./data/peak_transcript_read_inter_tbl.Rda")
 
-peak_transcript_inter_tbl %>% 
-  group_by(read.ID) %>% 
-  summarise(out=all(is.na(tr.ID))) %>% 
-  ungroup %>% 
-  group_by(out) %>% 
-  count %>% 
-  ggplot(.,aes('reads',n,fill=out))+
-  geom_bar(stat='identity',position='fill')
-
-peak_transcript_inter_tbl %>% 
-  distinct(tr.ID) %>% 
-  mutate(in.peaks='in') %>% 
-  full_join(.,tibble(tr.ID=1:length(reduced_transcript_Granges))) %>% 
-  mutate(in.peaks=ifelse(is.na(in.peaks),'out',in.peaks)) %>% 
-  group_by(in.peaks) %>% 
-  count %>% 
-  ggplot(.,aes('transcript',n,fill=in.peaks))+
-  geom_bar(stat='identity',position='fill')
-
-peak_transcript_inter_tbl %>% 
-  group_by(chr,start,end) %>% 
-  summarise(out=sum(is.na(tr.ID))/n(),
-            ntr=length(unique(tr.ID)),
-            nread=n(),
-            w=unique(end-start)) %>% 
-  ggplot(.,aes(out))+
-  geom_density()
-
-peak_transcript_inter_tbl %>% 
-  group_by(chr,start,end) %>% 
-  summarise(out=sum(is.na(tr.ID))/n(),
-            ntr=length(unique(tr.ID)),
-            nread=n(),
-            w=end-start) %>% 
-  ggplot(.,aes(ntr))+
-  geom_density()+
-  scale_x_log10()
-
-peak_transcript_inter_tbl %>% 
-  group_by(chr,start,end) %>% 
-  summarise(out=sum(is.na(tr.ID))/n(),
-            ntr=length(unique(tr.ID)),
-            nread=n(),
-            w=unique(end-start)) %>% 
-  ggplot(.,aes(w))+
-  geom_density()+
-  scale_x_log10()
-
-
-peak_transcript_inter_tbl %>% 
-  group_by(chr,start,end) %>% 
-  summarise(out=sum(is.na(tr.ID))/n(),
-            ntr=length(unique(tr.ID)),
-            nread=n(),
-            w=unique(end-start)) %>% 
-  mutate(rr=ntr/w) %>% 
-  ggplot(.,aes(out,rr))+
-  geom_point(size=0.1, alpha=0.1)+
-  geom_density_2d(color='red')+
-  scale_y_log10()+
-  geom_smooth()
-
-peak_transcript_inter_tbl %>% 
-  group_by(chr,start,end) %>% 
-  summarise(out=sum(is.na(tr.ID))/n(),
-            ntr=length(unique(tr.ID)),
-            nread=n(),
-            w=unique(end-start)) %>% 
-  ggplot(.,aes(out,w))+
-  geom_point(size=0.1, alpha=0.1)+
-  geom_density_2d(color='red',alpha=0.5)+
-  scale_y_log10()
-
-peak_transcript_inter_tbl %>% 
-  filter(!(is.na(tr.ID))) %>% 
-  group_by(tr.ID) %>% 
-  count %>% 
-  ggplot(.,aes(n))+
-  geom_density()+
-  scale_x_log10()
 
 #cumulative transcript curve for peaks sorted by peak content
 peak_tr_summary_tbl<-peak_transcript_inter_tbl %>% 
@@ -178,31 +101,103 @@ peak_tr_summary_tbl<-peak_transcript_inter_tbl %>%
   mutate(rr=nread/w) %>% 
   arrange(desc(rr))
 plan(multisession,workers=4)
-cummulative_vec<-future_map_int(sort(unique(peak_tr_summary_tbl$rr),decreasing = T),function(i){
-  peak_tr_summary_tbl %>% 
+cummulative_vec<-future_map_dfr(sort(unique(peak_tr_summary_tbl$rr),decreasing = T),function(i){
+
+  cum_tr<-peak_tr_summary_tbl %>% 
     ungroup %>% 
     filter(rr>=i) %>% 
     select(ntr) %>% 
     unnest(ntr) %>% 
     filter(!(is.na(ntr))) %>% 
-    distinct %>% 
+    distinct() %>% 
     nrow
+  return(peak_tr_summary_tbl %>% 
+           ungroup %>% 
+           filter(rr==i) %>% 
+           select(chr,start,end) %>% 
+           mutate(cummtr=cum_tr,
+                  rr=i))
+  
 })
 plan(sequential)
-tibble(rr=sort(unique(peak_tr_summary_tbl$rr),decreasing = T),cumcurve=cummulative_vec/length(unique(unlist(peak_tr_summary_tbl$ntr)))) %>% 
-  ggplot(.,aes(rev(rr),cumcurve))+
+cummulative_vec %>% 
+  mutate(rank=min_rank(1/rr),
+         cummcurve=cummtr/length(unique(unlist(peak_tr_summary_tbl$ntr)))) %>% 
+  ggplot(.,aes(rank,cummcurve))+
   geom_point()
+
+tibble(rr=1:length(unique(peak_tr_summary_tbl$rr)),cumcurve=cummulative_vec/length(unique(unlist(peak_tr_summary_tbl$ntr)))) %>% 
+  ggplot(.,aes(rr,cumcurve))+
+  geom_point()+
+  ylim(c(0,1))
+
+#cumulative transcript curve for peaks sorted by peak content
+tr_peak_summary_tbl<-peak_transcript_inter_tbl %>% 
+  group_by(tr.ID,chr,start,end) %>% 
+  summarise(peak.read=n()) %>% 
+  ungroup() %>% 
+  filter(!(is.na(tr.ID))) %>% 
+  group_by(tr.ID) %>% 
+  summarise(nread=sum(peak.read),
+            peak.set=list(unique(paste(chr,start,end,sep='_'))),
+            npeak=n())
+
+plan(multisession,workers=4)
+cummulative_tbl<-future_map_dfr(sort(unique(tr_peak_summary_tbl$npeak),decreasing = T),function(i){
+  cum_peak<-tr_peak_summary_tbl %>% 
+    ungroup %>% 
+    filter(npeak>=i) %>% 
+    select(peak.set) %>% 
+    unnest(cols=c(peak.set)) %>% 
+    distinct() %>% 
+    nrow
+  return(tr_peak_summary_tbl %>% 
+    ungroup %>% 
+    filter(npeak==i) %>% 
+    select(tr.ID) %>% 
+    mutate(cummpeak=cum_peak,
+           npeak=i))
+})
+plan(sequential)
+cummulative_tbl %>% 
+  mutate(rank=min_rank(1/npeak),
+         cummcurve=cummpeak/length(unique(unlist(tr_peak_summary_tbl$peak.set)))) %>% 
+  ggplot(.,aes(rank,cummcurve))+
+  geom_point()
+
 #-----------------------------------------------
 #Build network from this table (transfer to cluster)
-peak_transcript_inter_tbl
 # produce incidence matrix
 tr_set<-peak_transcript_inter_tbl %>% 
   distinct(tr.ID) %>% 
+  filter(!(is.na(tr.ID))) %>% 
   unlist
 distinct_peak_tbl<-peak_transcript_inter_tbl %>% 
   distinct(chr,start,end)
+nrow(distinct_peak_tbl)
+plan(multisession,workers=3)
+incidence_matrix<-do.call(cbind,future_map(1:nrow(distinct_peak_tbl),function(i){
+  tmp_peak<-distinct_peak_tbl %>% 
+    dplyr::slice(i)
+  peak_tr<-peak_transcript_inter_tbl %>% 
+    filter(chr== tmp_peak$chr & start == tmp_peak$start & end == tmp_peak$end) %>% 
+    distinct(tr.ID) %>% 
+    unlist
+  return(as.integer(tr_set %in% peak_tr))
+}))
+plan(sequential)
+colnames(incidence_matrix)<-distinct_peak_tbl %>% 
+  mutate(ID=paste(chr,start,end,sep='_')) %>% 
+  dplyr::select(ID) %>% 
+  unlist
+rownames(incidence_matrix)<-as.character(1:nrow(incidence_matrix))
+save(incidence_matrix,file = "./data/peak_transcript_incidence_mat.Rda")
+
 # convert to bi-partite graph
 # bi-partite projection
-g2 <- graph_from_incidence_matrix(M)
-g2$name <- "Event network"
-proj2 <- bipartite_projection(g2)
+load("./data/peak_transcript_incidence_mat.Rda")
+g2 <- graph_from_incidence_matrix(incidence_matrix)
+rm(incidence_matrix)
+proj2 <- bipartite_projection(g2,which="true",multiplicity = T)
+save(proj2,file = './data/peak_incidence_projection.Rda')
+load('./data/peak_incidence_projection.Rda')
